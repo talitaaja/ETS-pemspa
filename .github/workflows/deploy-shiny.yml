@@ -174,11 +174,12 @@ jobs:
             )
             rsconnect::deployApp(
               appDir = ".",
+              appMode = "shiny",
               appName = "webgis-probolinggo",
-              appFiles = files,
               account = Sys.getenv("RSCONNECT_USER"),
               server = "shinyapps.io",
+              dependencyResolution = "library",
               forceUpdate = TRUE,
               launch.browser = FALSE
-            )
-          '
+                        )
+          
