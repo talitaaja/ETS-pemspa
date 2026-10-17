@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       
+      
       - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,19 +37,16 @@ jobs:
             --pattern "raster-webgis.zip" \
             --dir .
 
-          echo "Memeriksa isi ZIP:"
-          unzip -l raster-webgis.zip
-
-          echo "Membuat folder data/hasil:"
           mkdir -p data/hasil
 
-          echo "Mengekstrak GeoTIFF ke folder yang benar:"
           unzip -o raster-webgis.zip -d data/hasil
 
-          echo "Memeriksa lima raster:"
+          echo "Memeriksa hasil ekstraksi:"
+          ls -lh data/hasil/
+
           for nama in NDVI NDWI NDCI NDBI Komposit; do
             test -s "data/hasil/${nama}_4326.tif"
-            echo "OK: ${nama}_4326.tif"
+            echo "BERHASIL: ${nama}_4326.tif"
           done
 
       - name: Validate required files
