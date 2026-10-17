@@ -1,46 +1,89 @@
 name: Deploy WebGIS Probolinggo
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "app.R"
-      - "data/hasil/**"
-      - ".github/workflows/deploy-shiny.yml"
-  workflow_dispatch:
+      - app.R
+      - kabupaten.geojson
+      - kecamatan.geojson
+      - Zonal_Statistics_Probolinggo.csv
+      - .github/workflows/deploy-shiny.yml
 
 permissions:
   contents: read
-
-concurrency:
-  group: deploy-webgis-probolinggo
-  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-   steps:
+
+    steps:
       - name: Check out source
         uses: actions/checkout@v4
-    
-      # Download dan ekstrak GeoTIFF
-      # Prepare GeoJSON dan CSV
-      # Validate required files
-    
+
+      - name: Download and extract raster package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download data-v1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'raster-webgis.zip' \
+            --dir .
+          echo 'Isi paket raster:'
+          unzip -l raster-webgis.zip
+          mkdir -p data/hasil
+          # ZIP saat ini menyimpan kelima TIFF langsung di root arsip.
+          unzip -o raster-webgis.zip -d data/hasil
+
+      - name: Prepare GeoJSON and CSV files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp kabupaten.geojson data/hasil/kabupaten.geojson
+          cp kecamatan.geojson data/hasil/kecamatan.geojson
+          cp Zonal_Statistics_Probolinggo.csv data/hasil/Zonal_Statistics_Probolinggo.csv
+
+      - name: Validate required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            app.R \
+            data/hasil/NDVI_4326.tif \
+            data/hasil/NDWI_4326.tif \
+            data/hasil/NDCI_4326.tif \
+            data/hasil/NDBI_4326.tif \
+            data/hasil/Komposit_4326.tif \
+            data/hasil/kabupaten.geojson \
+            data/hasil/kecamatan.geojson \
+            data/hasil/Zonal_Statistics_Probolinggo.csv; do
+            if [[ ! -s "$file" ]]; then
+              echo "::error::File tidak ada/kosong: $file"
+              exit 1
+            fi
+            echo "OK: $file"
+          done
+
       - name: Install Linux spatial dependencies
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgdal-dev libgeos-dev libproj-dev \
-            libudunits2-dev libssl-dev libcurl4-openssl-dev \
-            libxml2-dev
-    
+            libgdal-dev libgeos-dev libproj-dev libudunits2-dev \
+            libssl-dev libcurl4-openssl-dev libxml2-dev \
+            libfontconfig1-dev libfreetype6-dev libpng-dev \
+            libtiff5-dev libjpeg-dev
+
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
+          r-version: '4.4.3'
           use-public-rspm: true
-    
+
       - name: Install R dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
@@ -52,117 +95,12 @@ jobs:
             any::sf
             any::DT
             any::rsconnect
-            any::renv
-    
-      # Check shinyapps.io credentials
-    
-      # Verify Shiny dependencies
-    
-      # Deploy to shinyapps.io
-      - name: Download and extract raster package
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
+          cache-version: 1
 
-          gh release download data-v1 \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "raster-webgis.zip" \
-            --dir .
-
-          mkdir -p data/hasil
-
-          unzip -o raster-webgis.zip -d data/hasil
-
-          echo "Memeriksa hasil ekstraksi:"
-          ls -lh data/hasil/
-
-          for nama in NDVI NDWI NDCI NDBI Komposit; do
-            test -s "data/hasil/${nama}_4326.tif"
-            echo "BERHASIL: ${nama}_4326.tif"
-          done
-
-
-      - name: Prepare GeoJSON and CSV files
-        run: |
-          set -euo pipefail
-
-          mkdir -p data/hasil
-
-          cp kabupaten.geojson data/hasil/kabupaten.geojson
-          cp kecamatan.geojson data/hasil/kecamatan.geojson
-          cp Zonal_Statistics_Probolinggo.csv data/hasil/Zonal_Statistics_Probolinggo.csv
-
-          echo "Memeriksa semua file WebGIS:"
-          ls -lh data/hasil/
-
-      
       - name: Verify Shiny dependencies
         shell: bash
         run: |
-          cat > verify_dependencies.R <<'RSCRIPT'
-          packages <- c(
-            "shiny",
-            "leaflet",
-            "terra",
-            "raster",
-            "sf",
-            "DT",
-            "rsconnect"
-          )
-
-          missing <- packages[
-            !vapply(
-              packages,
-              requireNamespace,
-              logical(1),
-              quietly = TRUE
-            )
-          ]
-
-          if (length(missing) > 0) {
-            stop(
-              "Packages missing: ",
-              paste(missing, collapse = ", ")
-            )
-          }
-
-          cat("Semua paket utama tersedia.\n")
-
-          deps <- rsconnect::appDependencies(
-            appDir = ".",
-            appMode = "shiny",
-            dependencyResolution = "library"
-          )
-
-          print(deps[, c("Package", "Version")])
-
-          if (!"shiny" %in% deps$Package) {
-            stop("Paket shiny tidak terdeteksi!")
-          }
-
-          cat("Verifikasi dependency berhasil.\n")
-          RSCRIPT
-
-          Rscript verify_dependencies.R
-
-      - name: Install Linux spatial dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libgdal-dev libgeos-dev libproj-dev libudunits2-dev \
-            libcurl4-openssl-dev libssl-dev libxml2-dev
-
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: '4.4.3'
-          use-public-rspm: true
-
-      - name: Install R dependencies
-        shell: bash
-        run: |
-          Rscript -e 'install.packages(c("shiny", "leaflet", "terra", "raster", "sf", "DT", "rsconnect"), repos="https://cloud.r-project.org")'
+          Rscript -e 'pkgs <- c("shiny", "leaflet", "terra", "raster", "sf", "DT", "rsconnect"); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]; if (length(missing)) stop("Paket hilang: ", paste(missing, collapse = ", ")); cat("Semua paket utama tersedia.\n")'
 
       - name: Check shinyapps.io credentials
         env:
@@ -172,47 +110,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for key in RSCONNECT_USER RSCONNECT_TOKEN RSCONNECT_SECRET; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Missing GitHub Actions secret: $key"
+          for name in RSCONNECT_USER RSCONNECT_TOKEN RSCONNECT_SECRET; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::GitHub Secret $name belum dibuat"
               exit 1
             fi
           done
-
-
-      - name: Verify Shiny dependencies
-        shell: bash
-        run: |
-          Rscript -e '
-            packages <- c(
-              "shiny", "leaflet", "terra",
-              "raster", "sf", "DT", "rsconnect", "renv"
-            )
-
-            missing <- packages[
-              !vapply(packages, requireNamespace, logical(1),
-                      quietly = TRUE)
-            ]
-
-            if (length(missing)) {
-              stop("Packages missing: ",
-                   paste(missing, collapse = ", "))
-            }
-
-            deps <- rsconnect::appDependencies(
-              appDir = ".",
-              appMode = "shiny",
-              dependencyResolution = "library"
-            )
-
-            print(deps[, c("Package", "Version")])
-
-            if (!"shiny" %in% deps$Package) {
-              stop("shiny tidak terdeteksi sebagai dependency!")
-            }
-
-            cat("Semua pemeriksaan dependency berhasil.\n")
-          
+          echo 'Kredensial tersedia (nilainya tidak ditampilkan).'
 
       - name: Deploy to shinyapps.io
         env:
@@ -221,29 +125,29 @@ jobs:
           RSCONNECT_SECRET: ${{ secrets.RSCONNECT_SECRET }}
         shell: bash
         run: |
-          Rscript -e '
-            rsconnect::setAccountInfo(
-              name = Sys.getenv("RSCONNECT_USER"),
-              token = Sys.getenv("RSCONNECT_TOKEN"),
-              secret = Sys.getenv("RSCONNECT_SECRET")
-            )
-            files <- c(
-              "app.R",
-              file.path("data", "hasil", c(
-                "NDVI_4326.tif", "NDWI_4326.tif", "NDCI_4326.tif",
-                "NDBI_4326.tif", "Komposit_4326.tif",
-                "kabupaten.geojson", "kecamatan.geojson",
-                "Zonal_Statistics_Probolinggo.csv"
-              ))
-            )
-            rsconnect::deployApp(
-              appDir = ".",
-              appMode = "shiny",
-              appName = "webgis-probolinggo",
-              account = Sys.getenv("RSCONNECT_USER"),
-              server = "shinyapps.io",
-              dependencyResolution = "library",
-              forceUpdate = TRUE,
-              launch.browser = FALSE
-                        )
-          
+          Rscript - <<'RSCRIPT'
+          rsconnect::setAccountInfo(
+            name = Sys.getenv("RSCONNECT_USER"),
+            token = Sys.getenv("RSCONNECT_TOKEN"),
+            secret = Sys.getenv("RSCONNECT_SECRET")
+          )
+          berkas <- c(
+            "app.R",
+            paste0("data/hasil/", c("NDVI", "NDWI", "NDCI", "NDBI", "Komposit"), "_4326.tif"),
+            "data/hasil/kabupaten.geojson",
+            "data/hasil/kecamatan.geojson",
+            "data/hasil/Zonal_Statistics_Probolinggo.csv"
+          )
+          stopifnot(all(file.exists(berkas)))
+          rsconnect::deployApp(
+            appDir = ".",
+            appFiles = berkas,
+            appName = "webgis-probolinggo",
+            account = Sys.getenv("RSCONNECT_USER"),
+            server = "shinyapps.io",
+            appMode = "shiny",
+            dependencyResolution = "library",
+            forceUpdate = TRUE,
+            launch.browser = FALSE
+          )
+          RSCRIPT
