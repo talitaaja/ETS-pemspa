@@ -24,14 +24,25 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Download raster package from GitHub Release
+      - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download data-v1 --repo "$GITHUB_REPOSITORY" --pattern raster-webgis.zip --dir .
-          unzip -o raster-webgis.zip -d .
-          rm raster-webgis.zip
+          gh release download data-v1 \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "raster-webgis.zip" \
+            --dir .
+      
+          echo "Memeriksa isi ZIP:"
+          unzip -l raster-webgis.zip
+      
+          echo "Mengekstrak raster:"
+          unzip -o raster-webgis.zip
+      
+          echo "Memeriksa hasil ekstraksi:"
+          find . -name "NDVI_4326.tif" -print
+      
+          test -s data/hasil/NDVI_4326.tif
 
       - name: Validate required files
         shell: bash
