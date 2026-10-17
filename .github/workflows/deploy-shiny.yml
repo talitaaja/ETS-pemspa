@@ -83,14 +83,15 @@ jobs:
         with:
           r-version: '4.4.3'
           use-public-rspm: false
-
-
+      
       - name: Configure CRAN repository
         shell: bash
         run: |
           echo 'options(repos = c(CRAN = "https://cloud.r-project.org"))' >> ~/.Rprofile
 
-          echo "RENV_CONFIG_REPOS_OVERRIDE=https://cloud.r-project.org" >> "$GITHUB_ENV"
+          echo "RENV_CONFIG_REPOS_OVERRIDE=CRAN=https://cloud.r-project.org" >> "$GITHUB_ENV"
+          echo "RENV_CONFIG_PPM_ENABLED=false" >> "$GITHUB_ENV"
+          echo "RSCONNECT_PACKRAT=true" >> "$GITHUB_ENV"
 
           Rscript -e 'print(getOption("repos"))'
 
@@ -107,17 +108,47 @@ jobs:
             any::rsconnect
           cache-version: 1
 
-      - name: Check terra package source
+     
+      - name: Verify package repository URLs
         shell: bash
         run: |
           Rscript - <<'RSCRIPT'
-          options(repos = c(CRAN = "https://cloud.r-project.org"))
+          options(
+            repos = c(CRAN = "https://cloud.r-project.org"),
+            rsconnect.packrat = TRUE
+          )
 
           deps <- rsconnect::appDependencies(
             appDir = ".",
             appMode = "shiny",
             dependencyResolution = "library"
           )
+
+          print(
+            deps[deps$Package %in% c("shiny", "terra"),
+                 c("Package", "Version", "Source", "Repository"),
+                 drop = FALSE]
+          )
+
+          stopifnot(
+            all(c("shiny", "terra") %in% deps$Package)
+          )
+
+          repos <- deps$Repository[
+            deps$Package %in% c("shiny", "terra")
+          ]
+
+          if (any(is.na(repos) |
+                  !grepl("^https?://", repos))) {
+            stop(
+              "Masih ada repository tidak valid: ",
+              paste(repos, collapse = ", ")
+            )
+          }
+
+          cat("Repository shiny dan terra valid.\n")
+          RSCRIPT
+
 
           print(
             deps[deps$Package == "terra",
@@ -180,6 +211,15 @@ jobs:
             "data/hasil/Zonal_Statistics_Probolinggo.csv"
           )
           stopifnot(all(file.exists(berkas)))
+          options(
+            repos = c(CRAN = "https://cloud.r-project.org"),
+            rsconnect.packrat = TRUE
+          )
+          
+          Sys.setenv(
+            RENV_CONFIG_REPOS_OVERRIDE = "CRAN=https://cloud.r-project.org",
+            RENV_CONFIG_PPM_ENABLED = "false"
+          )
           rsconnect::deployApp(
             appDir = ".",
             appFiles = berkas,
