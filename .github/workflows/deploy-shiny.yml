@@ -115,6 +115,41 @@ jobs:
             fi
           done
 
+
+      - name: Verify Shiny dependencies
+        shell: bash
+        run: |
+          Rscript -e '
+            packages <- c(
+              "shiny", "leaflet", "terra",
+              "raster", "sf", "DT", "rsconnect", "renv"
+            )
+
+            missing <- packages[
+              !vapply(packages, requireNamespace, logical(1),
+                      quietly = TRUE)
+            ]
+
+            if (length(missing)) {
+              stop("Packages missing: ",
+                   paste(missing, collapse = ", "))
+            }
+
+            deps <- rsconnect::appDependencies(
+              appDir = ".",
+              appMode = "shiny",
+              dependencyResolution = "library"
+            )
+
+            print(deps[, c("Package", "Version")])
+
+            if (!"shiny" %in% deps$Package) {
+              stop("shiny tidak terdeteksi sebagai dependency!")
+            }
+
+            cat("Semua pemeriksaan dependency berhasil.\n")
+          
+
       - name: Deploy to shinyapps.io
         env:
           RSCONNECT_USER: ${{ secrets.RSCONNECT_USER }}
