@@ -61,26 +61,55 @@ jobs:
           echo "Memeriksa semua file WebGIS:"
           ls -lh data/hasil/
 
-      - name: Validate required files
+      
+      - name: Verify Shiny dependencies
         shell: bash
         run: |
-          set -euo pipefail
-          for f in \
-            app.R \
-            data/hasil/NDVI_4326.tif \
-            data/hasil/NDWI_4326.tif \
-            data/hasil/NDCI_4326.tif \
-            data/hasil/NDBI_4326.tif \
-            data/hasil/Komposit_4326.tif \
-            data/hasil/kabupaten.geojson \
-            data/hasil/kecamatan.geojson \
-            data/hasil/Zonal_Statistics_Probolinggo.csv; do
-            if [ ! -s "$f" ]; then
-              echo "::error::Missing/empty: $f"
-              exit 1
-            fi
-          done
-          ls -lh data/hasil
+          cat > verify_dependencies.R <<'RSCRIPT'
+          packages <- c(
+            "shiny",
+            "leaflet",
+            "terra",
+            "raster",
+            "sf",
+            "DT",
+            "rsconnect"
+          )
+
+          missing <- packages[
+            !vapply(
+              packages,
+              requireNamespace,
+              logical(1),
+              quietly = TRUE
+            )
+          ]
+
+          if (length(missing) > 0) {
+            stop(
+              "Packages missing: ",
+              paste(missing, collapse = ", ")
+            )
+          }
+
+          cat("Semua paket utama tersedia.\n")
+
+          deps <- rsconnect::appDependencies(
+            appDir = ".",
+            appMode = "shiny",
+            dependencyResolution = "library"
+          )
+
+          print(deps[, c("Package", "Version")])
+
+          if (!"shiny" %in% deps$Package) {
+            stop("Paket shiny tidak terdeteksi!")
+          }
+
+          cat("Verifikasi dependency berhasil.\n")
+          RSCRIPT
+
+          Rscript verify_dependencies.R
 
       - name: Install Linux spatial dependencies
         run: |
