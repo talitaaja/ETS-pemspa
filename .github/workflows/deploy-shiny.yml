@@ -20,10 +20,45 @@ jobs:
   deploy:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    steps:
+   steps:
       - name: Check out source
         uses: actions/checkout@v4
-
+    
+      # Download dan ekstrak GeoTIFF
+      # Prepare GeoJSON dan CSV
+      # Validate required files
+    
+      - name: Install Linux spatial dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgdal-dev libgeos-dev libproj-dev \
+            libudunits2-dev libssl-dev libcurl4-openssl-dev \
+            libxml2-dev
+    
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+    
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::leaflet
+            any::terra
+            any::raster
+            any::sf
+            any::DT
+            any::rsconnect
+            any::renv
+    
+      # Check shinyapps.io credentials
+    
+      # Verify Shiny dependencies
+    
+      # Deploy to shinyapps.io
       - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
