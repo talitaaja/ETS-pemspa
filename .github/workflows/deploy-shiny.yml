@@ -4,45 +4,45 @@ on:
   push:
     branches: [main]
     paths:
-      - 'app.R'
-      - 'data/hasil/*.geojson'
-      - 'data/hasil/*.csv'
-      - '.github/workflows/deploy-shiny.yml'
+      - "app.R"
+      - "data/hasil/**"
+      - ".github/workflows/deploy-shiny.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: shinyapps-probolinggo
+  group: deploy-webgis-probolinggo
   cancel-in-progress: false
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
       - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
+          set -euo pipefail
           gh release download data-v1 \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "raster-webgis.zip" \
             --dir .
-      
-          echo "Memeriksa isi ZIP:"
+          echo "Isi arsip:" 
           unzip -l raster-webgis.zip
-      
-          echo "Mengekstrak raster:"
-          unzip -o raster-webgis.zip
-      
-          echo "Memeriksa hasil ekstraksi:"
-          find . -name "NDVI_4326.tif" -print
-      
-          test -s data/hasil/NDVI_4326.tif
+          mkdir -p data/hasil
+          unzip -o raster-webgis.zip -d data/hasil
+          # Dukung dua struktur arsip: file langsung atau data/hasil/...
+          if [ -f data/hasil/data/hasil/NDVI_4326.tif ]; then
+            mv data/hasil/data/hasil/*.tif data/hasil/
+            rm -rf data/hasil/data
+          fi
 
       - name: Validate required files
         shell: bash
@@ -58,51 +58,75 @@ jobs:
             data/hasil/kabupaten.geojson \
             data/hasil/kecamatan.geojson \
             data/hasil/Zonal_Statistics_Probolinggo.csv; do
-            test -s "$f" || { echo "Missing/empty: $f"; exit 1; }
+            if [ ! -s "$f" ]; then
+              echo "::error::Missing/empty: $f"
+              exit 1
+            fi
           done
+          ls -lh data/hasil
 
-      - name: Install spatial system dependencies
+      - name: Install Linux spatial dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev libudunits2-dev libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev
+          sudo apt-get install -y --no-install-recommends \
+            libgdal-dev libgeos-dev libproj-dev libudunits2-dev \
+            libcurl4-openssl-dev libssl-dev libxml2-dev
 
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: 'release'
+          r-version: '4.4.3'
           use-public-rspm: true
 
       - name: Install R dependencies
-        shell: Rscript {0}
+        shell: bash
         run: |
-          install.packages(c('shiny', 'leaflet', 'terra', 'raster', 'sf', 'DT', 'rsconnect'))
+          Rscript -e 'install.packages(c("shiny", "leaflet", "terra", "raster", "sf", "DT", "rsconnect"), repos="https://cloud.r-project.org")'
 
-      - name: Deploy to shinyapps.io
-        shell: Rscript {0}
+      - name: Check shinyapps.io credentials
         env:
           RSCONNECT_USER: ${{ secrets.RSCONNECT_USER }}
           RSCONNECT_TOKEN: ${{ secrets.RSCONNECT_TOKEN }}
           RSCONNECT_SECRET: ${{ secrets.RSCONNECT_SECRET }}
+        shell: bash
         run: |
-          stopifnot(all(nzchar(Sys.getenv(c('RSCONNECT_USER', 'RSCONNECT_TOKEN', 'RSCONNECT_SECRET')))))
-          rsconnect::setAccountInfo(
-            name = Sys.getenv('RSCONNECT_USER'),
-            token = Sys.getenv('RSCONNECT_TOKEN'),
-            secret = Sys.getenv('RSCONNECT_SECRET')
-          )
-          files <- c(
-            'app.R',
-            paste0('data/hasil/', c('NDVI', 'NDWI', 'NDCI', 'NDBI', 'Komposit'), '_4326.tif'),
-            'data/hasil/kabupaten.geojson',
-            'data/hasil/kecamatan.geojson',
-            'data/hasil/Zonal_Statistics_Probolinggo.csv'
-          )
-          rsconnect::deployApp(
-            appDir = '.',
-            appFiles = files,
-            appName = 'webgis-probolinggo',
-            account = Sys.getenv('RSCONNECT_USER'),
-            server = 'shinyapps.io',
-            launch.browser = FALSE,
-            forceUpdate = TRUE
-          )
+          set -euo pipefail
+          for key in RSCONNECT_USER RSCONNECT_TOKEN RSCONNECT_SECRET; do
+            if [ -z "${!key}" ]; then
+              echo "::error::Missing GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+
+      - name: Deploy to shinyapps.io
+        env:
+          RSCONNECT_USER: ${{ secrets.RSCONNECT_USER }}
+          RSCONNECT_TOKEN: ${{ secrets.RSCONNECT_TOKEN }}
+          RSCONNECT_SECRET: ${{ secrets.RSCONNECT_SECRET }}
+        shell: bash
+        run: |
+          Rscript -e '
+            rsconnect::setAccountInfo(
+              name = Sys.getenv("RSCONNECT_USER"),
+              token = Sys.getenv("RSCONNECT_TOKEN"),
+              secret = Sys.getenv("RSCONNECT_SECRET")
+            )
+            files <- c(
+              "app.R",
+              file.path("data", "hasil", c(
+                "NDVI_4326.tif", "NDWI_4326.tif", "NDCI_4326.tif",
+                "NDBI_4326.tif", "Komposit_4326.tif",
+                "kabupaten.geojson", "kecamatan.geojson",
+                "Zonal_Statistics_Probolinggo.csv"
+              ))
+            )
+            rsconnect::deployApp(
+              appDir = ".",
+              appName = "webgis-probolinggo",
+              appFiles = files,
+              account = Sys.getenv("RSCONNECT_USER"),
+              server = "shinyapps.io",
+              forceUpdate = TRUE,
+              launch.browser = FALSE
+            )
+          '
