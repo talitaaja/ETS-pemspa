@@ -24,25 +24,32 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      
       - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: bash
         run: |
           set -euo pipefail
+
           gh release download data-v1 \
             --repo "$GITHUB_REPOSITORY" \
             --pattern "raster-webgis.zip" \
             --dir .
-          echo "Isi arsip:" 
+
+          echo "Memeriksa isi ZIP:"
           unzip -l raster-webgis.zip
+
+          echo "Membuat folder data/hasil:"
           mkdir -p data/hasil
+
+          echo "Mengekstrak GeoTIFF ke folder yang benar:"
           unzip -o raster-webgis.zip -d data/hasil
-          # Dukung dua struktur arsip: file langsung atau data/hasil/...
-          if [ -f data/hasil/data/hasil/NDVI_4326.tif ]; then
-            mv data/hasil/data/hasil/*.tif data/hasil/
-            rm -rf data/hasil/data
-          fi
+
+          echo "Memeriksa lima raster:"
+          for nama in NDVI NDWI NDCI NDBI Komposit; do
+            test -s "data/hasil/${nama}_4326.tif"
+            echo "OK: ${nama}_4326.tif"
+          done
 
       - name: Validate required files
         shell: bash
