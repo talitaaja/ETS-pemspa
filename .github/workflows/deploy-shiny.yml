@@ -94,6 +94,18 @@ jobs:
 
           Rscript -e 'print(getOption("repos"))'
 
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::shiny
+            any::leaflet
+            any::terra
+            any::raster
+            any::sf
+            any::DT
+            any::rsconnect
+          cache-version: 1
 
       - name: Check terra package source
         shell: bash
@@ -125,20 +137,7 @@ jobs:
 
           cat("Repository terra valid.\n")
           RSCRIPT
-
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          packages: |
-            any::shiny
-            any::leaflet
-            any::terra
-            any::raster
-            any::sf
-            any::DT
-            any::rsconnect
-          cache-version: 1
-
+          
       - name: Verify Shiny dependencies
         shell: bash
         run: |
