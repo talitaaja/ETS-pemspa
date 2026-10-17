@@ -1,0 +1,97 @@
+name: Deploy WebGIS Probolinggo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.R'
+      - 'data/hasil/*.geojson'
+      - 'data/hasil/*.csv'
+      - '.github/workflows/deploy-shiny.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shinyapps-probolinggo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download raster package from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download data-v1 --repo "$GITHUB_REPOSITORY" --pattern raster-webgis.zip --dir .
+          unzip -o raster-webgis.zip -d .
+          rm raster-webgis.zip
+
+      - name: Validate required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in \
+            app.R \
+            data/hasil/NDVI_4326.tif \
+            data/hasil/NDWI_4326.tif \
+            data/hasil/NDCI_4326.tif \
+            data/hasil/NDBI_4326.tif \
+            data/hasil/Komposit_4326.tif \
+            data/hasil/kabupaten.geojson \
+            data/hasil/kecamatan.geojson \
+            data/hasil/Zonal_Statistics_Probolinggo.csv; do
+            test -s "$f" || { echo "Missing/empty: $f"; exit 1; }
+          done
+
+      - name: Install spatial system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev libgeos-dev libproj-dev libudunits2-dev libcurl4-openssl-dev libssl-dev libxml2-dev libfontconfig1-dev
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'release'
+          use-public-rspm: true
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(c('shiny', 'leaflet', 'terra', 'raster', 'sf', 'DT', 'rsconnect'))
+
+      - name: Deploy to shinyapps.io
+        shell: Rscript {0}
+        env:
+          RSCONNECT_USER: ${{ secrets.RSCONNECT_USER }}
+          RSCONNECT_TOKEN: ${{ secrets.RSCONNECT_TOKEN }}
+          RSCONNECT_SECRET: ${{ secrets.RSCONNECT_SECRET }}
+        run: |
+          stopifnot(all(nzchar(Sys.getenv(c('RSCONNECT_USER', 'RSCONNECT_TOKEN', 'RSCONNECT_SECRET')))))
+          rsconnect::setAccountInfo(
+            name = Sys.getenv('RSCONNECT_USER'),
+            token = Sys.getenv('RSCONNECT_TOKEN'),
+            secret = Sys.getenv('RSCONNECT_SECRET')
+          )
+          files <- c(
+            'app.R',
+            paste0('data/hasil/', c('NDVI', 'NDWI', 'NDCI', 'NDBI', 'Komposit'), '_4326.tif'),
+            'data/hasil/kabupaten.geojson',
+            'data/hasil/kecamatan.geojson',
+            'data/hasil/Zonal_Statistics_Probolinggo.csv'
+          )
+          rsconnect::deployApp(
+            appDir = '.',
+            appFiles = files,
+            appName = 'webgis-probolinggo',
+            account = Sys.getenv('RSCONNECT_USER'),
+            server = 'shinyapps.io',
+            launch.browser = FALSE,
+            forceUpdate = TRUE
+          )
