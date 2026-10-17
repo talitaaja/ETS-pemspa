@@ -24,8 +24,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      
-      
       - name: Download and extract raster package
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,6 +46,20 @@ jobs:
             test -s "data/hasil/${nama}_4326.tif"
             echo "BERHASIL: ${nama}_4326.tif"
           done
+
+
+      - name: Prepare GeoJSON and CSV files
+        run: |
+          set -euo pipefail
+
+          mkdir -p data/hasil
+
+          cp kabupaten.geojson data/hasil/kabupaten.geojson
+          cp kecamatan.geojson data/hasil/kecamatan.geojson
+          cp Zonal_Statistics_Probolinggo.csv data/hasil/Zonal_Statistics_Probolinggo.csv
+
+          echo "Memeriksa semua file WebGIS:"
+          ls -lh data/hasil/
 
       - name: Validate required files
         shell: bash
