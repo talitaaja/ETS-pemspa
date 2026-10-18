@@ -160,6 +160,23 @@ server <- function(input, output, session) {
                                    group = 'Satelit')
     m <- leaflet::addProviderTiles(m, leaflet::providers$Esri.WorldTopoMap,
                                    group = 'Topografi')
+    # Border kecamatan selalu ditampilkan
+    m <- leaflet::addPolygons(
+      m,
+      data = kec,
+      group = "Batas Kecamatan",
+      color = "#243746",
+      weight = 1.2,
+      opacity = 0.9,
+      fill = FALSE,
+      label = ~Nama_Kecamatan,
+      layerId = ~Nama_Kecamatan,
+      highlightOptions = leaflet::highlightOptions(
+        weight = 2.5,
+        color = "#FFC857",
+        bringToFront = TRUE
+      )
+    )
     m <- leaflet::addLayersControl(m,
                                    baseGroups = c('OpenStreetMap','Satelit','Topografi'),
                                    options = leaflet::layersControlOptions(collapsed = FALSE))
