@@ -108,12 +108,12 @@ jobs:
             any::rsconnect
           cache-version: 1
 
-     
       
       - name: Verify package repository URLs
         shell: bash
         run: |
-          Rscript -e "options(repos = c(CRAN = 'https://cloud.r-project.org')); deps <- rsconnect::appDependencies(appDir = '.', appMode = 'shiny', dependencyResolution = 'library'); selected <- deps[deps\$Package %in% c('shiny', 'terra'), , drop = FALSE]; print(selected[, c('Package', 'Version', 'Source', 'Repository')]); stopifnot(nrow(selected) == 2); stopifnot(all(grepl('^https?://', selected\$Repository))); cat('Repository shiny dan terra valid.\n')"
+          Rscript - <<'RSCRIPT'
+          options(repos = c(CRAN = "https://cloud.r-project.org"))
 
           deps <- rsconnect::appDependencies(
             appDir = ".",
@@ -121,50 +121,20 @@ jobs:
             dependencyResolution = "library"
           )
 
-          print(
-            deps[deps$Package %in% c("shiny", "terra"),
-                 c("Package", "Version", "Source", "Repository"),
-                 drop = FALSE]
-          )
-
-          stopifnot(
-            all(c("shiny", "terra") %in% deps$Package)
-          )
-
-          repos <- deps$Repository[
-            deps$Package %in% c("shiny", "terra")
+          selected <- deps[
+            deps$Package %in% c("shiny", "terra"),
+            ,
+            drop = FALSE
           ]
 
-          if (any(is.na(repos) |
-                  !grepl("^https?://", repos))) {
-            stop(
-              "Masih ada repository tidak valid: ",
-              paste(repos, collapse = ", ")
-            )
-          }
+          print(selected[, c("Package", "Version", "Source", "Repository")])
+
+          stopifnot(nrow(selected) == 2)
+          stopifnot(all(grepl("^https?://", selected$Repository)))
 
           cat("Repository shiny dan terra valid.\n")
           RSCRIPT
 
-
-          print(
-            deps[deps$Package == "terra",
-                 c("Package", "Version", "Source", "Repository")]
-          )
-
-          repo <- deps$Repository[deps$Package == "terra"]
-
-          if (length(repo) != 1 ||
-              is.na(repo) ||
-              !grepl("^https?://", repo)) {
-            stop(
-              "Repository terra tidak valid: ",
-              paste(repo, collapse = ", ")
-            )
-          }
-
-          cat("Repository terra valid.\n")
-          RSCRIPT
           
       - name: Verify Shiny dependencies
         shell: bash
