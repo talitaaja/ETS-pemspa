@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release download data-v1 \
+          gh release download data-v2 \
             --repo "$GITHUB_REPOSITORY" \
             --pattern 'raster-webgis.zip' \
             --dir .
