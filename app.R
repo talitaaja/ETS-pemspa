@@ -10,7 +10,7 @@ library(sf)
 library(DT)
 
 # Jalankan dari folder yang berisi app.R dan subfolder data/hasil.
-dir_hasil <- file.path('data', 'hasil')
+dir_hasil <- "D:/ETS Pemspa 2/data/hasil"
 indeks <- c('NDVI', 'NDWI', 'NDCI', 'NDBI')
 nama_layer <- c(indeks, 'Komposit')
 berkas <- setNames(file.path(dir_hasil, paste0(nama_layer, '_4326.tif')), nama_layer)
@@ -42,18 +42,23 @@ for (nm in setdiff(names(stat_data), 'Kecamatan')) {
 # Warna yang secara visual berbeda untuk setiap indeks.
 warna <- list(
   NDVI=c('#f4f9ed','#ccebb5','#80c978','#269c55','#075f34'),
-  NDWI=c('#ecf5ff','#bbddfc','#73b8ed','#277fc0','#073b80'),
-  NDCI=c('#fff3e8','#ffd7a7','#fda66a','#eb713a','#a83c21'),
+  NDWI=c('#eef3ff','#c6d7ff','#8faef5','#4f78d4','#173b92'),
+  NDCI=c('#eefaff','#caefff','#94d7ff','#56b9f2','#1f8fd6'),
   NDBI=c('#fff1f2','#ffc6c9','#f58b91','#d9394a','#881326')
 )
 warna_komposit <- c('#269c55','#d9394a','#277fc0','#9bdfff')
 nama_komposit <- c('Vegetasi','Kawasan terbangun','Perairan','Awan (SCL)')
 label_indeks <- c(NDVI='NDVI · Vegetasi', NDWI='NDWI · Perairan',
-                  NDCI='NDCI · Red–NIR (eksploratif)', NDBI='NDBI · Bangunan')
+                  NDCI='NDCI · Awan', NDBI='NDBI · Bangunan')
 
 # Mengubah rentang VISUALISASI saja; nilai asli raster dan statistik tidak dimodifikasi.
 # Gunakan persentil 2%-98% agar kontras lebih terlihat dan outlier tak mendominasi.
 siapkan_layer <- function(nama, maks_sel=120000L) {
+  if (length(nama) != 1L || is.na(nama) || !nama %in% names(berkas)) {
+    stop('Pilihan layer tidak dikenal: ', paste(nama, collapse=', '),
+         '. Pilih NDVI, NDWI, NDCI, NDBI, atau Komposit.')
+  }
+  if (!file.exists(berkas[[nama]])) stop('Raster tidak ditemukan: ', berkas[[nama]])
   x <- terra::rast(berkas[[nama]])
   if (!terra::same.crs(x, 'EPSG:4326')) stop('Raster ', nama, ' bukan EPSG:4326.')
   faktor <- max(1L, ceiling(sqrt(terra::ncell(x)/maks_sel)))
@@ -96,9 +101,9 @@ buat_info <- function(nama_indeks) {
 }
 
 anggota <- div(class='footer-anggota',
-  strong('Tim Pengembang'),
-  span('Talita Adzra Junita Arief (5016241044)'),
-  span('Linda Ambala Tifa Ramadhani (5016241045)'))
+               strong('Tim Pengembang'),
+               span('Talita Adzra Junita Arief (5016241044)'),
+               span('Linda Ambala Tifa Ramadhani (5016241045)'))
 
 ui <- fluidPage(
   tags$head(tags$meta(name='viewport', content='width=device-width, initial-scale=1')),
@@ -121,7 +126,14 @@ ui <- fluidPage(
     .panel-white{background:#fff;border:1px solid #dce5ef;border-radius:15px;padding:19px;margin-bottom:22px;box-shadow:0 7px 25px #16324f12}
     .panel-white h3{margin-top:0;color:#12325f;font-weight:800}
     .panel-white p{color:#182333}.map-controls{margin-bottom:16px}
-    .map-controls .form-group{margin-bottom:6px}#peta{border-radius:10px;overflow:hidden}
+    .map-controls .form-group{margin-bottom:6px}
+    .map-wrap{position:relative;margin-top:8px}
+    #peta{border-radius:10px;overflow:hidden}
+    .floating-map-panel{position:absolute;top:14px;left:14px;z-index:1000;width:min(340px,calc(100% - 28px));
+      background:rgba(255,255,255,.96);backdrop-filter:blur(4px);border:1px solid #d9e3ef;border-radius:14px;
+      box-shadow:0 10px 28px rgba(22,50,79,.16);padding:14px 14px 10px}
+    .floating-map-panel .form-group{margin-bottom:10px}
+    .floating-map-panel .control-note{font-size:12px;line-height:1.55;color:#23364d;margin:2px 2px 0}
     .leaflet-popup-content{margin:11px 15px}.leaflet-tooltip{color:#101c2b}
     .stats-switch .shiny-options-group{display:flex;gap:8px;flex-wrap:wrap}
     .stats-switch .radio-inline{background:#eaf0f7;border:1px solid #d6e0ee;border-radius:10px;padding:10px 15px;margin:0;color:#122b50;font-weight:700}
@@ -132,59 +144,58 @@ ui <- fluidPage(
     .footer-anggota strong{color:#123d78}.note{font-size:12px;color:#24354a}
     .btn-default{border-radius:8px;font-weight:700;color:#123765}
     @media(max-width:767px){.container-fluid{padding:0 10px}.info-card{min-height:0}
-      .panel-white{padding:12px}.hero{padding-top:16px}.switch-nav .nav-tabs>li>a{padding:13px 3px;font-size:13px}}
+      .panel-white{padding:12px}.hero{padding-top:16px}.switch-nav .nav-tabs>li>a{padding:13px 3px;font-size:13px}
+      .floating-map-panel{position:static;width:100%;margin-bottom:12px}}
   '))),
   div(class='hero',
       h1('WebGIS Indeks Spektral Kabupaten Probolinggo'),
       p('Eksplorasi vegetasi, perairan, kawasan terbangun, dan kondisi wilayah dari citra Sentinel-2B Level-2A · 3 Juli 2026')),
   fluidRow(
     column(4, div(class='info-card', h4('Tentang WebGIS'),
-      p('WebGIS ini membantu melihat kondisi permukaan wilayah Kabupaten Probolinggo melalui peta dan angka pada 24 kecamatan.'),
-      p('Pilih halaman Peta Interaktif untuk melihat sebaran warna, atau Statistik Zonal untuk membandingkan kecamatan.'))),
+                  p('WebGIS ini membantu melihat kondisi permukaan wilayah Kabupaten Probolinggo melalui peta dan angka pada 24 kecamatan.'),
+                  p('Pilih halaman Peta Interaktif untuk melihat sebaran warna, atau Statistik Zonal untuk membandingkan kecamatan.'))),
     column(4, div(class='info-card', h4('Panduan Indeks'),
-      p(HTML(paste0('<span class="swatch" style="background:#269c55"></span><b>NDVI</b> Vegetasi<br>',
-                    '<span class="swatch" style="background:#277fc0"></span><b>NDWI</b> Perairan<br>',
-                    '<span class="swatch" style="background:#eb713a"></span><b>NDCI</b> Red–NIR (eksploratif)<br>',
-                    '<span class="swatch" style="background:#d9394a"></span><b>NDBI</b> Kawasan terbangun<br>',
-                    '<span class="swatch" style="background:#9bdfff"></span><b>Awan</b> pada peta komposit'))),
-      p('Catatan: NDCI pada data ini memakai rumus yang sama dengan NDVI, sehingga nilainya sama meskipun warnanya dibedakan.'))),
+                  p(HTML(paste0('<span class="swatch" style="background:#269c55"></span><b>NDVI</b> Vegetasi<br>',
+                                '<span class="swatch" style="background:#173b92"></span><b>NDWI</b> Perairan<br>',
+                                '<span class="swatch" style="background:#56b9f2"></span><b>NDCI</b> Awan<br>',
+                                '<span class="swatch" style="background:#d9394a"></span><b>NDBI</b> Kawasan terbangun<br>'))))),
     column(4, div(class='info-card', h4('Sumber dan Batasan'),
-      p(HTML('Citra satelit: <a href="https://dataspace.copernicus.eu/" target="_blank">Copernicus Data Space</a> (Sentinel-2B L2A, 3 Juli 2026).')),
-      p(HTML('Batas Kabupaten dan Kecamatan Probolinggo: <a href="https://tanahair.indonesia.go.id/" target="_blank">Badan Informasi Geospasial (BIG)</a> sesuai sumber data yang digunakan.')),
-      p('Peta komposit merupakan gambaran awal, bukan penentuan tutupan lahan yang sudah dicek langsung di lapangan. Awan diambil dari pengelompokan citra satelit (SCL).')))
+                  p(HTML('Citra satelit: <a href="https://dataspace.copernicus.eu/" target="_blank">Copernicus Data Space</a> (Sentinel-2B L2A, 3 Juli 2026).')),
+                  p(HTML('Batas Kabupaten dan Kecamatan Probolinggo: <a href="https://tanahair.indonesia.go.id/" target="_blank">Badan Informasi Geospasial (BIG)</a> sesuai sumber data yang digunakan.')),
+                  p('Peta komposit merupakan gambaran awal, awan diambil dari pengelompokan citra satelit (SCL).')))
   ),
   div(class='switch-nav',
-    tabsetPanel(id='halaman', type='tabs',
-      tabPanel('Peta Interaktif', value='peta',
-        div(class='panel-white',
-          fluidRow(class='map-controls',
-            column(4, selectInput('layer', 'Pilih indeks/lapisan',
-                   choices=c(label_indeks, 'Komposit Tutupan Lahan'='Komposit'), selected='NDVI')),
-            column(4, selectInput('filter_kec', 'Sorot kecamatan',
-                   choices=c('Semua Kecamatan'='Semua', sort(unique(stat_data$Kecamatan))), selected='Semua')),
-            column(4, checkboxInput('tampil_raster', 'Tampilkan warna indeks pada peta', TRUE))),
-          p(class='note', 'Arahkan kursor ke suatu kecamatan untuk melihat statistik indeks terpilih; klik wilayah untuk membuka popup yang dapat dibaca lebih lama.'),
-          leafletOutput('peta', height='640px'),
-          tags$br(), p(class='note', 'Skala warna menggunakan persentil 2–98 dari raster yang ditampilkan agar perbedaan warna lebih terlihat. Nilai statistik tidak diubah.')),
-        anggota),
-      tabPanel('Statistik Zonal', value='statistik',
-        div(class='panel-white',
-          h3('Perbandingan Statistik Zonal per Kecamatan'),
-          p('Pilih indeks untuk melihat peringkat kecamatan, grafik rata-rata, serta tabel statistik terperinci.'),
-          div(class='stats-switch', radioButtons('indeks_stat', NULL,
-            choices=c('NDVI · Vegetasi'='NDVI','NDWI · Perairan'='NDWI',
-                      'NDCI · Red–NIR'='NDCI','NDBI · Bangunan'='NDBI'),
-            selected='NDVI',inline=TRUE)),
-          div(class='top-kecamatan', textOutput('pemenang', inline=TRUE)),
-          tags$br(),plotOutput('grafik', height='550px'),
-          p(class='note','Grafik memperlihatkan 10 kecamatan dengan rata-rata indeks tertinggi. Nilai yang mendekati nol atau negatif tetap ditampilkan sebagaimana hasil pengolahan citra.'),
-          h3('Tabel Statistik Kecamatan'),
-          DTOutput('tabel'),tags$br(),
-          downloadButton('unduh','Unduh Statistik CSV'),
-          tags$br(),tags$br(),
-          p(class='note','Mean = rata-rata; median = nilai tengah; minimum/maksimum = nilai terendah/tertinggi; standar deviasi = ukuran variasi nilai.')),
-        anggota)
-    )
+      tabsetPanel(id='halaman', type='tabs',
+                  tabPanel('Peta Interaktif', value='peta',
+                           div(class='panel-white',
+                               div(class='map-wrap',
+                                   div(class='floating-map-panel',
+                                       selectInput('layer', 'Pilih indeks/lapisan',
+                                                   choices=c(setNames(names(label_indeks), unname(label_indeks)), 'Komposit Tutupan Lahan'='Komposit'), selected='NDVI'),
+                                       selectInput('filter_kec', 'Sorot kecamatan',
+                                                   choices=c('Semua Kecamatan'='Semua', sort(unique(stat_data$Kecamatan))), selected='Semua'),
+                                       checkboxInput('tampil_raster', 'Tampilkan warna indeks pada peta', TRUE),
+                                       p(class='control-note', 'Arahkan kursor ke suatu kecamatan untuk melihat statistik indeks terpilih; klik wilayah untuk membuka popup yang dapat dibaca lebih lama.')),
+                                   leafletOutput('peta', height='640px'))),
+                           anggota),
+                  tabPanel('Statistik Zonal', value='statistik',
+                           div(class='panel-white',
+                               h3('Perbandingan Statistik Zonal per Kecamatan'),
+                               p('Pilih indeks untuk melihat peringkat kecamatan, grafik rata-rata, serta tabel statistik terperinci.'),
+                               div(class='stats-switch', radioButtons('indeks_stat', NULL,
+                                                                      choices=c('NDVI · Vegetasi'='NDVI','NDWI · Perairan'='NDWI',
+                                                                                'NDCI · Awan'='NDCI','NDBI · Bangunan'='NDBI'),
+                                                                      selected='NDVI',inline=TRUE)),
+                               div(class='top-kecamatan', textOutput('pemenang', inline=TRUE)),
+                               tags$br(),plotOutput('grafik', height='550px'),
+                               p(class='note','Grafik memperlihatkan 10 kecamatan dengan rata-rata indeks tertinggi. Nilai yang mendekati nol atau negatif tetap ditampilkan sebagaimana hasil pengolahan citra.'),
+                               h3('Tabel Statistik Kecamatan'),
+                               DTOutput('tabel'),tags$br(),
+                               downloadButton('unduh','Unduh Statistik CSV'),
+                               tags$br(),tags$br(),
+                               p(class='note','Mean = rata-rata; median = nilai tengah; minimum/maksimum = nilai terendah/tertinggi; standar deviasi = ukuran variasi nilai.')),
+                           anggota)
+      )
   )
 )
 
@@ -233,7 +244,7 @@ server <- function(input, output, session) {
                      labFormat=labelFormat(digits=3),layerId='legenda_raster')
     }
   },ignoreInit=FALSE)
-
+  
   # Batas kecamatan dan informasinya digambar ulang ketika layer/filter berubah.
   # Pane batas lebih tinggi daripada raster, sehingga hover dan klik tetap bekerja.
   observeEvent(list(input$layer,input$filter_kec), {
@@ -247,14 +258,14 @@ server <- function(input, output, session) {
       ifelse(kec$Nama_Kecamatan==selected, '#ffae25','#203f60')
     m <- leafletProxy('peta',session=session) |> clearShapes()
     m <- addPolygons(m,data=kec,group='Batas Kecamatan',
-      color=garis,weight=berat,opacity=.95,fill=TRUE,
-      fillColor='#ffffff',fillOpacity=.015,
-      options=pathOptions(pane='batasPane'),
-      layerId=~Nama_Kecamatan,
-      label=lapply(informasi,HTML),popup=lapply(informasi,HTML),
-      labelOptions=labelOptions(direction='auto',textsize='12px',opacity=.97),
-      highlightOptions=highlightOptions(weight=3,color='#ffb327',fillOpacity=.08,
-                                       bringToFront=TRUE))
+                     color=garis,weight=berat,opacity=.95,fill=TRUE,
+                     fillColor='#ffffff',fillOpacity=.015,
+                     options=pathOptions(pane='batasPane'),
+                     layerId=~Nama_Kecamatan,
+                     label=lapply(informasi,HTML),popup=lapply(informasi,HTML),
+                     labelOptions=labelOptions(direction='auto',textsize='12px',opacity=.97),
+                     highlightOptions=highlightOptions(weight=3,color='#ffb327',fillOpacity=.08,
+                                                       bringToFront=TRUE))
     if (selected!='Semua') {
       kk <- kec[kec$Nama_Kecamatan==selected,,drop=FALSE]
       if(nrow(kk)) {
@@ -263,7 +274,7 @@ server <- function(input, output, session) {
       }
     }
   }, ignoreInit=FALSE)
-
+  
   tabel_terpilih <- reactive({
     req(input$indeks_stat)
     nama <- input$indeks_stat
